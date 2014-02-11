@@ -190,7 +190,6 @@ class LogStash::Inputs::Collectd < LogStash::Inputs::Base
         retval = (((byte1 << 32) + byte2) * (2**-30)).to_i
       when 6 # Values
         val_bytes = body.slice!(0..1)
-        val_count = val_bytes.pack("C*").unpack("n")
         if body.length % 9 == 0 # Should be 9 fields
           count = 0
           retval = []
