@@ -1,6 +1,7 @@
 # encoding: utf-8
 require "logstash/codecs/base"
 require "json"
+require "time"
 
 # This codec will take JSON returned by collectd (e.g. sent via the write amqp
 # plugin) and create a logstash event from it
@@ -27,7 +28,7 @@ class LogStash::Codecs::CollectdJSON < LogStash::Codecs::Base
           when 'values'
             to_yield['value'] = value[counter]
           when 'time'
-            to_yield['time'] = (value * 1000).to_i
+            to_yield['@timestamp'] = Time.at(events['time'])
           when 'dstypes', 'dsnames'
             # Nothing, don't add these to the event
           else
