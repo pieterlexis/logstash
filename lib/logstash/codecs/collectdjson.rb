@@ -14,36 +14,34 @@ class LogStash::Codecs::CollectdJSON < LogStash::Codecs::Base
   config :prune_intervals, :validate => :boolean, :default => true
 
   public
+  def register
+    @to_delete = %w(time type interval dsnames values dstypes)
+  end
+
+  public
   def decode(line)
     Thread.new do
       # The collectd JSON is 'wrapped' inside an array
-      events = JSON.parse(line[1..-2])
-      counter = 0
-      events['dstypes'].each do
-        to_yield = {}
-        events.each do |key,value|
-          case key
-          when 'type'
-            to_yield['collectd_type'] = value
-          when 'values'
-            to_yield['value'] = value[counter]
-          when 'time'
-            to_yield['@timestamp'] = Time.at(events['time'])
-          when 'dstypes', 'dsnames'
-            # Nothing, don't add these to the event
-          else
-            if key != 'interval' || (key == 'interval' && !@prune_intervals)
-              if value.is_a?(Array)
-                to_yield[key] = value[counter] if !value[counter].empty?
-              else
-                to_yield[key] = value if !value.empty?
-              end
-            end
-          end
-        end
-        counter += 1
-        yield(LogStash::Event.new(to_yield))
+      collectd = JSON.parse(line[1..-2])
+      ls_event = {}
+
+      # Parse some special field in the data
+      ls_event['@timestamp'] = Time.at(collectd['time'])
+      ls_event['collectd_type'] = collectd['type']
+      ls_event['interval'] = collectd['interval'] if !@prune_intervals
+      collectd['dsnames'].each_with_index do |name,i|
+        ls_event[name] = collectd['values'][i]
       end
+
+      # delete all fields from collectd already added to the event and
+      # clean up the collectd data
+      collectd.each do |key,value|
+        collectd.delete(key) if @to_delete.include?(key) or value.empty?
+      end
+
+      # We merge ls_event with collectd because collectd might contain extra
+      # data we care about
+      yield(LogStash::Event.new(ls_event.merge(collectd)))
     end
   end
 end
